@@ -1,0 +1,37 @@
+# Core Application Dependencies
+fastapi
+uvicorn[standard]  # ASGI server for FastAPI
+pydantic
+
+# Data Science / ML Core
+pandas
+numpy
+scikit-learn
+
+# Database (Example: PostgreSQL client)
+psycopg2-binary
+SQLAlchemy
+
+# Cloud SDK (Example: AWS)
+# boto3 # Uncomment if using AWS
+
+# --- Development Dependencies ---
+# Install using: pip install -r requirements.txt -r requirements-dev.txt
+# Or pip install -e .[dev] if using setup.py/pyproject.toml with extras
+
+# Testing
+pytest
+pytest-cov
+requests # For API testing
+pysqlite3-binary # Driver for SQLite (often needed on systems without built-in support)
+
+# Linting & Formatting
+flake8
+black
+
+# Notebooks
+jupyterlab
+notebook
+
+# Other Dev Tools
+python-dotenv # For loading .env files
