@@ -1,11 +1,11 @@
 import os
 import os
-from pydantic import BaseSettings, PostgresDsn, validator
-from typing import Optional
-from dotenv import load_dotenv
+from typing import Optional, Union
+from pydantic_settings import BaseSettings # Updated import
+from pydantic import PostgresDsn, validator # Keep these if still used
+from dotenv import load_dotenv # Keep this import if needed elsewhere, but remove the call below
 
-# Load .env file variables
-load_dotenv()
+# Load .env file variables - pydantic-settings handles this via Config
 
 class Settings(BaseSettings):
     """Application settings."""
@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # Production/Development Database (PostgreSQL)
     POSTGRES_SERVER: str = os.getenv("POSTGRES_SERVER", "localhost")
-    POSTGRES_PORT: str = os.getenv("POSTGRES_PORT", "5432")
+    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432")) # Changed type hint to int and added explicit cast
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
     POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "password")
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "credit_scoring_db")
@@ -42,14 +42,14 @@ class Settings(BaseSettings):
             # Assemble PostgreSQL URI for prod/dev
             pg_uri = PostgresDsn.build(
                 scheme="postgresql+psycopg2", # Specify psycopg2 driver
-                user=values.get("POSTGRES_USER"),
+                username=values.get("POSTGRES_USER"), # Corrected from 'user' to 'username'
                 password=values.get("POSTGRES_PASSWORD"),
                 host=values.get("POSTGRES_SERVER"),
                 port=values.get("POSTGRES_PORT"),
-                path=f"/{values.get('POSTGRES_DB') or ''}",
+                path=f"{values.get('POSTGRES_DB') or ''}",
             )
             print("INFO: Using PostgreSQL database URI:", pg_uri) # Added print for visibility
-            return pg_uri
+            return str(pg_uri)
 
     # --- AWS Settings (Example) ---
     AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")

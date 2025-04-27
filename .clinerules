@@ -1,0 +1,20 @@
+# Cline Rules for AI Credit Scoring Platform
+
+## Core Principles
+- Maintain detailed documentation in the memory-bank/.
+- Always use the sequentialthinking MCP tool for planning and execution steps.
+- Leverage the context7 MCP tool for retrieving documentation when needed.
+
+## Memory Bank Management
+- Read ALL memory bank files at the start of EVERY task.
+- Update memory bank files when:
+    - Discovering new project patterns.
+    - After implementing significant changes.
+    - When the user requests with "update memory bank".
+    - When context needs clarification.
+- Focus updates on activeContext.md and progress.md to track current state.
+
+## Project Specifics
+- Project Goal: Build an AI-Based Credit Scoring platform for unbanked micro-entrepreneurs in emerging markets.
+- Key Technologies (Initial thoughts): AI/ML, Alternative Data Analysis, Risk Assessment models.
+- Remember the project context and goals outlined in projectbrief.md and productContext.md.

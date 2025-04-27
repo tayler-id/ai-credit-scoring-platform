@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 SQLALCHEMY_DATABASE_URL = settings.DATABASE_URI
 
+# Always define Base so ORM models can be imported even if DB is down
+Base = declarative_base()
+
 try:
     # Adjust pool settings as needed for production
     engine = create_engine(
@@ -20,7 +23,6 @@ try:
         # max_overflow=20 # Example: Set max overflow
     )
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    Base = declarative_base()
     logger.info(f"Database engine created successfully for URI: {settings.DATABASE_URI}")
 
     # Optional: Test connection on startup
@@ -32,7 +34,7 @@ except Exception as e:
     # Handle initialization error appropriately - maybe prevent app startup
     engine = None
     SessionLocal = None
-    Base = None
+    # Do NOT set Base = None here!
 
 # Dependency function to get a DB session for FastAPI endpoints
 def get_db():

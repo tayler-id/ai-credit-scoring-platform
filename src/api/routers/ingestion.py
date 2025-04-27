@@ -1,9 +1,11 @@
 from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from src.common.models import AlternativeDataPayload, IngestionResponse
 from src.common.db import get_db
 from src.crud import crud_ingestion_log
-from src.data_processing.processor import process_data_for_applicant # Import processor
+from src.data_processing.processor import process_data_for_applicant # Generic processor
+from src.data_ingestion.utility_payments import ingest_utility_payments # Specific utility ingestion
 import logging
 import uuid
 
@@ -53,10 +55,22 @@ async def ingest_data(
         # to background tasks easily; the task itself should create its own session if needed.
         # For this placeholder, we'll assume process_data_for_applicant handles its session.
         # A better approach might be to pass IDs and let the task fetch data.
-        background_tasks.add_task(process_data_for_applicant, db, payload.applicant_id)
-        logger.info(f"Queued background data processing for applicant: {payload.applicant_id}")
+
+        # --- Trigger background processing based on data source ---
         status_msg = "Data received and queued for processing."
-        # -----------------------------------
+        if payload.data_source == "utility_payments":
+            # Pass applicant_id and the raw payload dict to the specific ingestion function
+            background_tasks.add_task(ingest_utility_payments, payload.applicant_id, payload.payload)
+            logger.info(f"Queued background utility payment ingestion for applicant: {payload.applicant_id}")
+            status_msg = "Utility payment data received and queued for processing."
+        else:
+            # Fallback to generic processor for other data sources for now
+            # Note: This generic processor might need adjustment or replacement later
+            # It still has the issue of passing the db session directly.
+            background_tasks.add_task(process_data_for_applicant, db, payload.applicant_id)
+            logger.info(f"Queued generic background data processing for applicant: {payload.applicant_id}, source: {payload.data_source}")
+            status_msg = f"Data received from source '{payload.data_source}' and queued for generic processing."
+        # ---------------------------------------------------------
 
     except Exception as e:
         # The CRUD function handles rollback and logging, just re-raise or handle API response

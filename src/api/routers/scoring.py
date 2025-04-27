@@ -46,8 +46,8 @@ async def request_credit_score(
     # -------------------------------------------------
 
     try:
-        # Call the placeholder prediction function directly (synchronous for now)
-        score, risk_level = predict_score(db=db, applicant_id=request.applicant_id)
+        # Call the updated prediction function (now returns SHAP explanation)
+        score, risk_level, shap_explanation = predict_score(db=db, applicant_id=request.applicant_id)
 
         if score is None or risk_level is None:
             logger.warning(f"Score prediction failed or returned None for applicant: {request.applicant_id}")
@@ -58,7 +58,7 @@ async def request_credit_score(
 
         status_msg = "Score calculated successfully."
         response_status = "completed"
-        logger.info(f"Score generated for applicant {request.applicant_id}: Score={score}, Risk={risk_level}")
+        logger.info(f"Score generated for applicant {request.applicant_id}: Score={score}, Risk={risk_level}, SHAP={shap_explanation}")
 
     except HTTPException as http_exc:
         # Re-raise HTTP exceptions directly
@@ -75,7 +75,8 @@ async def request_credit_score(
         score=score,
         risk_level=risk_level,
         status=response_status,
-        message=status_msg
+        message=status_msg,
+        shap_explanation=shap_explanation
     )
 
 # Example of a potential endpoint to retrieve the score later (if async)
