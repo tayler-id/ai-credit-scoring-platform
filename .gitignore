@@ -150,5 +150,5 @@ node_modules/
 **/node_modules/
 
 # Cline specific
-/.clinerules
-/memory-bank/
+# /.clinerules # Removed to allow tracking
+# /memory-bank/ # Removed to allow tracking
