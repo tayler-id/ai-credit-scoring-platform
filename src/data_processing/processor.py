@@ -2,16 +2,22 @@ import logging
 from sqlalchemy.orm import Session
 from src.models.ingestion_log import IngestionLog
 from src.models.utility_payment import UtilityPayment
+from src.models.supply_chain import SupplyChainTransaction # Import model
+# Import other models as needed (MobileMoney, ECommerce)
 import pandas as pd
 import numpy as np
 
-# --- New imports for mobile money ---
-from src.data_ingestion.mobile_money import mock_fetch_mobile_money_transactions
-from src.data_processing.mobile_money_processor import engineer_mobile_money_features
+# --- Processor function imports ---
+# Utility features are engineered within this file's helpers
+from src.data_processing.mobile_money_processor import engineer_mobile_money_features # Assuming this exists
+from src.data_processing.ecommerce_processor import engineer_ecommerce_features # Assuming this exists
+from src.data_processing.supply_chain_processor import engineer_supply_chain_features # Use the refactored version
 
-# --- New imports for e-commerce ---
-from src.data_ingestion.ecommerce import mock_fetch_ecommerce_transactions
-from src.data_processing.ecommerce_processor import engineer_ecommerce_features
+# --- CRUD function imports ---
+# from src.crud.crud_mobile_money import get_mobile_money_transactions_by_applicant # Placeholder
+# from src.crud.crud_ecommerce import get_ecommerce_transactions_by_applicant # Placeholder
+from src.crud.crud_supply_chain import get_supply_chain_transactions_by_applicant # Now implemented
+
 
 logger = logging.getLogger(__name__)
 
@@ -36,23 +42,44 @@ def process_data_for_applicant(db: Session, applicant_id: str):
         utility_features = engineer_features(cleaned_data)
 
     # 2. Fetch and process mobile money data
-    mm_df = mock_fetch_mobile_money_transactions(applicant_id)
-    mm_features = engineer_mobile_money_features(mm_df)
+    # TODO: Replace mock fetch with actual DB query using CRUD
+    # mm_transactions = get_mobile_money_transactions_by_applicant(db, applicant_id)
+    # mm_features = engineer_mobile_money_features(mm_transactions) # Assuming processor takes list of objects
+    logger.warning(f"Mobile money data fetching not implemented for applicant {applicant_id}. Using empty features.")
+    mm_features = {} # Placeholder
 
     # 3. Fetch and process e-commerce data
-    ec_df = mock_fetch_ecommerce_transactions(applicant_id)
-    ec_features = engineer_ecommerce_features(ec_df)
+    # TODO: Replace mock fetch with actual DB query using CRUD
+    # ec_transactions = get_ecommerce_transactions_by_applicant(db, applicant_id)
+    # ec_features = engineer_ecommerce_features(ec_transactions) # Assuming processor takes list of objects
+    logger.warning(f"E-commerce data fetching not implemented for applicant {applicant_id}. Using empty features.")
+    ec_features = {} # Placeholder
 
-    # 4. Merge features
+    # 4. Fetch and process supply chain data
+    # Fetch from DB using CRUD
+    try:
+        # Assuming a CRUD function exists or will be added to crud_supply_chain.py
+        sc_transactions = get_supply_chain_transactions_by_applicant(db, applicant_id)
+        sc_features = engineer_supply_chain_features(sc_transactions) # Pass list of objects
+    except NameError: # Handle if CRUD function doesn't exist yet
+         logger.error("CRUD function 'get_supply_chain_transactions_by_applicant' not found. Skipping supply chain features.")
+         sc_features = {}
+    except Exception as e:
+        logger.error(f"Error processing supply chain data for applicant {applicant_id}: {e}", exc_info=True)
+        sc_features = {}
+
+
+    # 5. Merge features from all sources
     features = {}
     features.update(utility_features)
     features.update(mm_features)
     features.update(ec_features)
+    features.update(sc_features) # Add supply chain features
 
-    # 5. Save features to a Feature Store or database table
+    # 6. Save features to a Feature Store or database table
     save_features(db, applicant_id, features)
 
-    # 6. Update status (e.g., mark ingestion logs as 'processed' or update applicant status)
+    # 7. Update status (e.g., mark ingestion logs as 'processed' or update applicant status)
     # Example: update_ingestion_status(db, raw_logs, 'processed')
     update_status_placeholder(db, applicant_id, 'processed')
 
@@ -122,15 +149,38 @@ def engineer_features(df: pd.DataFrame) -> dict:
     return features
 
 from src.models.applicant_features import ApplicantFeatures
+import json
+
+# Helper function to convert numpy types to standard Python types for JSON serialization
+def convert_numpy_types(obj):
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        # Handle potential NaN/Inf values before converting to float
+        if np.isnan(obj):
+            return None # Or another representation like 'NaN' string
+        elif np.isinf(obj):
+            return None # Or another representation like 'Infinity' string
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(i) for i in obj]
+    return obj
 
 def save_features(db: Session, applicant_id: str, features: dict):
     """Upserts engineered features for the applicant into the database."""
-    logger.info(f"Saving features for {applicant_id}: {features}")
+    # Convert numpy types in the features dictionary before saving
+    serializable_features = convert_numpy_types(features)
+    logger.info(f"Saving serializable features for {applicant_id}: {serializable_features}")
+
     existing = db.query(ApplicantFeatures).filter(ApplicantFeatures.applicant_id == applicant_id).first()
     if existing:
-        existing.features = features
+        existing.features = serializable_features
     else:
-        new_entry = ApplicantFeatures(applicant_id=applicant_id, features=features)
+        new_entry = ApplicantFeatures(applicant_id=applicant_id, features=serializable_features)
         db.add(new_entry)
     db.commit()
 
@@ -140,3 +190,29 @@ def update_status_placeholder(db: Session, applicant_id: str, status: str):
     # Replace with actual status update logic
 
 # ------------------------------------
+
+if __name__ == "__main__":
+    # This block allows running the processor directly as a script
+    # For example, to process data for all synthetic applicants
+    from src.common.db import SessionLocal
+
+    logger.info("Starting standalone data processing run...")
+    db = SessionLocal()
+    try:
+        # Fetch applicant IDs (e.g., from utility payments or a dedicated applicant table)
+        # For now, let's assume we know the synthetic IDs
+        # TODO: Fetch this dynamically in a real scenario
+        applicant_ids = [f"synthetic_{i+1:03d}" for i in range(20)] # Match NUM_APPLICANTS in generation script
+
+        if not applicant_ids:
+            logger.warning("No applicant IDs found to process.")
+        else:
+            logger.info(f"Found {len(applicant_ids)} applicants to process.")
+            for applicant_id in applicant_ids:
+                process_data_for_applicant(db=db, applicant_id=applicant_id)
+            logger.info("Standalone data processing run finished.")
+
+    except Exception as e:
+        logger.error(f"Error during standalone processing run: {e}", exc_info=True)
+    finally:
+        db.close()
