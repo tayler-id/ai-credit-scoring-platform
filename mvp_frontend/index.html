@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MVP Credit Scoring</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>MVP Credit Scoring Platform</h1>
+
+    <section id="basic-profile-section">
+        <h2>Basic Profile</h2>
+        <form id="basic-profile-form">
+            <div>
+                <label for="applicant_id_profile">Applicant ID:</label>
+                <input type="text" id="applicant_id_profile" name="applicant_id" required>
+            </div>
+            <div>
+                <label for="name">Name:</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div>
+                <label for="phone_number">Phone Number:</label>
+                <input type="text" id="phone_number" name="phone_number" required>
+            </div>
+            <div>
+                <label for="occupation">Occupation:</label>
+                <input type="text" id="occupation" name="occupation">
+            </div>
+            <div>
+                <label for="years_in_business">Years in Business:</label>
+                <input type="number" id="years_in_business" name="years_in_business" required>
+            </div>
+            <button type="submit">Submit Basic Profile</button>
+        </form>
+        <p id="profile-status"></p>
+    </section>
+
+    <section id="declared-income-section">
+        <h2>Declared Income</h2>
+        <form id="declared-income-form">
+            <div>
+                <label for="applicant_id_income">Applicant ID:</label>
+                <input type="text" id="applicant_id_income" name="applicant_id" required>
+            </div>
+            <div>
+                <label for="monthly_income">Monthly Income:</label>
+                <input type="number" id="monthly_income" name="monthly_income" required>
+            </div>
+            <button type="submit">Submit Declared Income</button>
+        </form>
+        <p id="income-status"></p>
+    </section>
+
+    <section id="score-section">
+        <h2>Get Score</h2>
+        <form id="score-form">
+            <div>
+                <label for="applicant_id_score">Applicant ID:</label>
+                <input type="text" id="applicant_id_score" name="applicant_id" required>
+            </div>
+            <button type="submit">Get Basic Score</button>
+        </form>
+        <div id="score-result">
+            <h3>Score: <span id="basic-score">N/A</span></h3>
+            <h3>Loan Offer: <span id="loan-offer">N/A</span></h3>
+        </div>
+        <p id="score-status"></p>
+    </section>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,4 +1,7 @@
 import logging
+import joblib # For loading trained models
+import pandas as pd
+import numpy as np
 from sqlalchemy.orm import Session
 from src.models.applicant_features import ApplicantFeatures
 
@@ -11,22 +14,23 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score
 
 logger = logging.getLogger(__name__)
 
-def load_model(model_path: str = "path/to/dummy_model.pkl"):
-    """Placeholder function to simulate loading a trained ML model."""
-    logger.info(f"Simulating loading model from: {model_path}")
-    # In a real scenario, load the model using joblib, pickle, etc.
-    # Example:
-    # import joblib
-    # try:
-    #     model = joblib.load(model_path)
-    #     return model
-    # except FileNotFoundError:
-    #     logger.error(f"Model file not found at {model_path}")
-    #     return None
-    # except Exception as e:
-    #     logger.error(f"Error loading model from {model_path}: {e}", exc_info=True)
-    #     return None
-    return "dummy_model_object" # Return a placeholder
+# TODO: Make model path configurable (e.g., via settings)
+DEFAULT_MODEL_PATH = "artifacts/model.joblib"
+
+def load_model(model_path: str = DEFAULT_MODEL_PATH):
+    """Loads a trained ML model artifact from the specified path using joblib."""
+    logger.info(f"Loading model from: {model_path}")
+    try:
+        model = joblib.load(model_path)
+        logger.info(f"Model loaded successfully: {type(model)}")
+        # TODO: Add validation checks (e.g., check expected methods like predict_proba)
+        return model
+    except FileNotFoundError:
+        logger.error(f"Model file not found at {model_path}")
+        return None
+    except Exception as e:
+        logger.error(f"Error loading model from {model_path}: {e}", exc_info=True)
+        return None
 
 def train_ml_pipeline(X, y, random_state=42):
     """
@@ -268,6 +272,7 @@ def compute_shap_values(model, features: dict):
             # Placeholder for rule-based or dummy model
             return {"shap_values": [("N/A", 0.0)], "explanation": "SHAP not available for rule-based model."}
     except Exception as e:
+        logger.error(f"Error computing SHAP values: {e}", exc_info=True)
         return {"shap_values": [("N/A", 0.0)], "explanation": f"SHAP computation error: {e}"}
 
 from sklearn.metrics import roc_auc_score
@@ -487,119 +492,92 @@ def predict_score(db: Session, applicant_id: str):
     """
     logger.info(f"Starting score prediction for applicant: {applicant_id}")
 
-    # 1. Load the model (placeholder)
-    model = load_model()
+    # 1. Load the trained ML model
+    model = load_model() # Uses DEFAULT_MODEL_PATH unless overridden
     if model is None:
-        logger.error("Failed to load scoring model.")
-        return None, None, {"shap_values": [("N/A", 0.0)], "explanation": "Model not loaded."}
+        logger.error("Failed to load scoring model. Cannot predict.")
+        # Return default/error values
+        return 0.0, "error", {"shap_values": [("N/A", 0.0)], "explanation": "Model not loaded."}
 
-    # 2. Get features (placeholder)
+    # 2. Get features for the applicant
     try:
-        features = get_features_for_applicant(db, applicant_id)
-        if not features:
-            logger.warning(f"No features found for applicant: {applicant_id}")
-            return None, None, {"shap_values": [("N/A", 0.0)], "explanation": "No features found."}
+        features_dict = get_features_for_applicant(db, applicant_id)
+        if not features_dict:
+            logger.warning(f"No features found for applicant: {applicant_id}. Cannot predict.")
+            return 0.0, "undetermined", {"shap_values": [("N/A", 0.0)], "explanation": "No features found."}
     except Exception as e:
         logger.error(f"Error retrieving features for applicant {applicant_id}: {e}", exc_info=True)
-        return None, None, {"shap_values": [("N/A", 0.0)], "explanation": f"Feature retrieval error: {e}"}
+        return 0.0, "error", {"shap_values": [("N/A", 0.0)], "explanation": f"Feature retrieval error: {e}"}
 
-    # 3. Predict using a simple rule-based baseline model (utility + mobile money)
-    logger.info(f"Predicting using baseline rules with features: {features}")
+    # 3. Prepare features for the model
+    # Assuming the model expects a pandas DataFrame with specific columns
+    # The order of columns must match the order used during training
     try:
-        # Utility payment features
-        on_time_rate = features.get("on_time_payment_rate", 0)
-        num_late = features.get("num_late_payments", 0)
-        num_missed = features.get("num_missed_payments", 0)
-        num_payments = features.get("num_payments", 0)
+        # TODO: Get the expected feature order from the loaded model or metadata
+        # Example: feature_names = model.feature_names_in_
+        # Ensure the columns in features_df match exactly what the model expects.
+        # This might involve selecting specific keys from features_dict based on model metadata.
+        # For now, assume features_dict keys are the features, but filter out unexpected ones if possible.
+        try:
+            expected_features = model.feature_names_in_ # Attempt to get expected features
+        except AttributeError:
+            logger.warning("Model does not have 'feature_names_in_'. Using all available features.")
+            expected_features = list(features_dict.keys())
 
-        # Mobile money features
-        mm_num_txn = features.get("mm_num_transactions", 0)
-        mm_total_inflow = features.get("mm_total_inflow", 0.0)
-        mm_total_outflow = features.get("mm_total_outflow", 0.0)
-        mm_cash_in_ratio = features.get("mm_cash_in_ratio", 0.0)
-        mm_cash_out_ratio = features.get("mm_cash_out_ratio", 0.0)
-        mm_p2p_send_count = features.get("mm_p2p_send_count", 0)
-        mm_active_days = features.get("mm_active_days", 0)
-        mm_payment_regular_days = features.get("mm_payment_regular_days", 0)
+        # Include only expected features, handle missing columns if needed
+        features_for_model = {k: features_dict.get(k) for k in expected_features if k in features_dict}
+        # TODO: Add robust handling for missing expected features (e.g., imputation based on training)
+        features_df = pd.DataFrame([features_for_model], columns=expected_features)
+        # Example: Fill missing expected features with 0 (use a better strategy if possible)
+        features_df = features_df.fillna(0)
 
-        # Utility payment score (as before)
-        if num_payments == 0:
-            utility_score = 0.2
-        else:
-            utility_score = (
-                0.5 * on_time_rate +
-                0.2 * (1 - min(num_late, 5) / 5) +
-                0.1 * (1 - min(num_missed, 5) / 5)
-            )
-            utility_score = min(max(utility_score, 0), 1)
+        # Log if supply chain features are present but potentially unused by the current model
+        sc_keys = [k for k in features_dict if k.startswith("sc_")]
+        if sc_keys and not any(k in expected_features for k in sc_keys):
+            logger.warning(f"Supply chain features present ({sc_keys}) but may not be used by the loaded model.")
 
-        # Mobile money score (simple rule: more activity, inflow, and regularity = higher score)
-        mm_score = 0.0
-        if mm_num_txn > 0:
-            # Normalize inflow/outflow for scoring (capped for baseline)
-            inflow_score = min(mm_total_inflow / 1000, 1.0)  # e.g., 1000 units = max
-            activity_score = min(mm_num_txn / 20, 1.0)       # 20 txns = max
-            regularity_score = min(mm_payment_regular_days / 30, 1.0)  # 30 days = max
-            mm_score = 0.4 * inflow_score + 0.4 * activity_score + 0.2 * regularity_score
-        else:
-            mm_score = 0.2
+    except Exception as e:
+        logger.error(f"Error preparing features for model prediction: {e}", exc_info=True)
+        return 0.0, "error", {"shap_values": [("N/A", 0.0)], "explanation": f"Feature preparation error: {e}"}
 
-        # E-commerce features
-        ec_num_txn = features.get("ec_num_transactions", 0)
-        ec_total_spend = features.get("ec_total_spend", 0.0)
-        ec_merchant_diversity = features.get("ec_merchant_diversity", 0)
-        ec_category_diversity = features.get("ec_category_diversity", 0)
-        ec_completed_ratio = features.get("ec_completed_ratio", 0.0)
-        ec_purchase_frequency = features.get("ec_purchase_frequency", 0.0)
 
-        # E-commerce score (simple rule: more spend, more transactions, more diversity, high completion ratio = higher score)
-        ec_score = 0.0
-        if ec_num_txn > 0:
-            spend_score = min(ec_total_spend / 1000, 1.0)  # 1000 units = max
-            txn_score = min(ec_num_txn / 20, 1.0)          # 20 txns = max
-            diversity_score = min((ec_merchant_diversity + ec_category_diversity) / 10, 1.0)  # 10 = max
-            completion_score = ec_completed_ratio  # Already [0,1]
-            freq_score = min(ec_purchase_frequency / 2, 1.0)  # 2/day = max
-            ec_score = 0.3 * spend_score + 0.2 * txn_score + 0.2 * diversity_score + 0.2 * completion_score + 0.1 * freq_score
-        else:
-            ec_score = 0.2
+    # 4. Predict probability using the loaded ML model
+    logger.info(f"Predicting using loaded ML model ({type(model)}) with features: {features_dict}")
+    try:
+        # Assuming the model's pipeline handles scaling/preprocessing
+        # predict_proba usually returns [[prob_class_0, prob_class_1]]
+        probability_class_1 = model.predict_proba(features_df)[0, 1]
+        score = float(probability_class_1) # Ensure score is a standard float
 
-        # Combine scores (weighted average, handle missing data)
-        present_scores = []
-        weights = []
+        # Determine risk level based on probability score
+        # TODO: Use the optimized threshold from T-5 if available
+        threshold_medium = 0.5 # Example threshold
+        threshold_low = 0.8    # Example threshold
 
-        if num_payments > 0:
-            present_scores.append(utility_score)
-            weights.append(0.5)
-        if mm_num_txn > 0:
-            present_scores.append(mm_score)
-            weights.append(0.3)
-        if ec_num_txn > 0:
-            present_scores.append(ec_score)
-            weights.append(0.2)
-
-        if not present_scores:
-            score = 0.0
-        else:
-            # Normalize weights if some sources are missing
-            total_weight = sum(weights)
-            norm_weights = [w / total_weight for w in weights]
-            score = sum(s * w for s, w in zip(present_scores, norm_weights))
-            score = min(max(score, 0), 1)  # Clamp to [0, 1]
-
-        # Risk level
-        if score >= 0.8:
+        if score >= threshold_low:
             risk_level = "low"
-        elif score >= 0.5:
+        elif score >= threshold_medium:
             risk_level = "medium"
         else:
             risk_level = "high"
+
+    except AttributeError:
+         logger.error(f"Loaded model object does not have 'predict_proba' method. Using default score.")
+         score = 0.0
+         risk_level = "error"
     except Exception as e:
-        logger.error(f"Error in baseline prediction for applicant {applicant_id}: {e}", exc_info=True)
-        return None, None, {"shap_values": [("N/A", 0.0)], "explanation": f"Prediction error: {e}"}
+        logger.error(f"Error during ML model prediction for applicant {applicant_id}: {e}", exc_info=True)
+        score = 0.0
+        risk_level = "error"
+        # Ensure shap_explanation is still generated even if prediction fails
+        shap_explanation = {"shap_values": [("N/A", 0.0)], "explanation": f"Prediction error: {e}"}
+        logger.info(f"Prediction failed for applicant {applicant_id}. Score: {score}, Risk: {risk_level}, SHAP: {shap_explanation}")
+        return score, risk_level, shap_explanation
 
-    # 4. Compute SHAP values or placeholder
-    shap_explanation = compute_shap_values(model, features)
 
-    logger.info(f"Prediction complete for applicant {applicant_id}. Score: {score}, Risk: {risk_level}, SHAP: {shap_explanation}")
+    # 5. Compute SHAP values using the loaded model and prepared features
+    # Pass the dictionary to compute_shap_values
+    shap_explanation = compute_shap_values(model, features_for_model) # Pass dictionary here
+
+    logger.info(f"Prediction complete for applicant {applicant_id}. Score: {score:.4f}, Risk: {risk_level}, SHAP: {shap_explanation}")
     return score, risk_level, shap_explanation

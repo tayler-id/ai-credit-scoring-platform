@@ -57,3 +57,36 @@ class UtilityPaymentRecord(BaseModel):
     bill_period_end: date | None = Field(None, description="End date of the billing period")
 
 # class UtilityBill(BaseModel): ... # This might represent a full bill with multiple line items, potentially containing UtilityPaymentRecord(s)
+
+# MVP Basic Data Models
+class BasicProfileCreate(BaseModel):
+    """
+    Request model to create a basic profile for the MVP.
+    """
+    applicant_id: str = Field(..., description="Unique identifier for the applicant")
+    name: str = Field(..., description="Applicant's name")
+    phone_number: str = Field(..., description="Applicant's phone number")
+    occupation: str | None = Field(default=None, description="Applicant's occupation or type of business")
+    years_in_business: int | None = Field(default=None, description="Number of years in business")
+
+class DeclaredIncomeCreate(BaseModel):
+    """
+    Request model to create declared income data for the MVP.
+    """
+    applicant_id: str = Field(..., description="Unique identifier for the applicant")
+    monthly_income: float = Field(..., description="Applicant's self-declared monthly income")
+
+class MVPScoreRequest(BaseModel):
+    """
+    Request model to get a basic MVP credit score for an applicant.
+    """
+    applicant_id: str = Field(..., description="Unique identifier for the applicant")
+
+class MVPScoreResponse(BaseModel):
+    """
+    Response model containing the basic MVP credit score.
+    """
+    applicant_id: str
+    basic_score: float | None = None
+    status: str = Field(default="pending", description="Status of the scoring process (e.g., pending, completed, error)")
+    message: str | None = None
